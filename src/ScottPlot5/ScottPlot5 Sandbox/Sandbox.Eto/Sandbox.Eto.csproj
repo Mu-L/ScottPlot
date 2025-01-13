@@ -2,15 +2,21 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net462</TargetFramework>
+        <TargetFramework>net8.0-windows</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <LangVersion>latest</LangVersion>
+        <LangVersion>11</LangVersion>
+        <IsPackable>false</IsPackable>
+
+        <!-- This package may not be fully compatible with your project -->
+        <NoWarn>NU1701</NoWarn>
+        <SignAssembly>True</SignAssembly>
+        <AssemblyOriginatorKeyFile>../../Key.snk</AssemblyOriginatorKeyFile>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Eto.Forms" Version="2.7.0" />
-        <PackageReference Include="Eto.Platform.WPF" Version="2.7.0" />
+        <PackageReference Include="Eto.Forms" Version="2.8.3" />
+        <PackageReference Include="Eto.Platform.WPF" Version="2.8.3" />
     </ItemGroup>
 
     <ItemGroup>

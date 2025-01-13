@@ -1,8 +1,5 @@
-﻿using System;
-using System.Windows;
+﻿using System.Windows;
 using ScottPlot;
-
-#nullable enable
 
 namespace Sandbox.WPF;
 
@@ -12,16 +9,14 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        int pointCount = 1000;
-        Random rand = new(0);
-        double[] ys = Generate.NoisySin(rand, pointCount);
-        double[] xs = Generate.Consecutive(pointCount);
+        WpfPlot1.Plot.Add.Signal(Generate.Sin());
+        WpfPlot1.Plot.Add.Signal(Generate.Cos());
+    }
 
-        var sp = WpfPlot.Plot.Add.Scatter(xs, ys);
-        sp.LineStyle.Width = 5;
-        sp.MarkerStyle = new MarkerStyle(MarkerShape.OpenSquare, 9, Colors.Red);
-        sp.MarkerStyle.Outline.Width = 3;
-
-        WpfPlot.Refresh();
+    private void Button_Click(object sender, RoutedEventArgs e)
+    {
+        WpfPlot1.Reset();
+        WpfPlot1.Plot.Add.Signal(Generate.RandomWalk(100));
+        WpfPlot1.Refresh();
     }
 }

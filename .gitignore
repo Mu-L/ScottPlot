@@ -1,3 +1,4 @@
+/src/ScottPlot5/BenchmarkDotNet.Artifacts
 /dev/www/metrics
 *.Metrics.xml
 /dev/www/cookbook
@@ -57,6 +58,8 @@ project.lock.json
 project.fragment.lock.json
 artifacts/
 **/Properties/launchSettings.json
+# Unignore the specific launchSettings.json file for Sandbox.UnoPlatform
+!/src/ScottPlot5/ScottPlot5 Sandbox/Sandbox.UnoPlatform/Sandbox.UnoPlatform/Properties/launchSettings.json
 
 *_i.c
 *_p.c
@@ -312,3 +315,6 @@ src/ScottPlot4/ScottPlot/ScottPlot.xml
 dev/docfx/_exported_templates/
 dev/docfx/api/*.yml
 dev/docfx/api/.manifest
+
+# Vim swap files
+.*.swp

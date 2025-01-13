@@ -1,77 +1,26 @@
-﻿using ScottPlot.Axis.StandardAxes;
-using ScottPlot.Grids;
+﻿namespace ScottPlot.Stylers;
 
-namespace ScottPlot.Stylers;
-
-/// <summary>
-/// A collection of high-level methods that make it easy to style many components of a plot at once
-/// </summary>
-public class PlotStyler
+[Obsolete("This class is deprecated. See the ScottPlot Cookbook for styling information.", true)]
+public class PlotStyler()
 {
-    private readonly Plot Plot;
+    [Obsolete("This method is deprecated. Assign Plot.FigureBackground.Color instead.", true)]
+    public void Background(Color figure, Color data) { }
 
-    public PlotStyler(Plot plot)
-    {
-        Plot = plot;
-    }
+    [Obsolete("This method is deprecated. Call Plot.Axes.Color() instead.", true)]
+    public void ColorAxes(Color color) { }
 
-    /// <summary>
-    /// Apply background colors to the figure and data areas
-    /// </summary>
-    public void Background(Color figure, Color data)
-    {
-        Plot.FigureBackground = figure;
-        Plot.DataBackground = data;
-    }
+    [Obsolete("Reference Plot.Legend properties directly.", true)]
+    public void ColorLegend(Color background, Color foreground, Color border) { }
 
-    /// <summary>
-    /// Apply a single color to all components of each axis (label, tick labels, tick marks, and frame)
-    /// </summary>
-    public void ColorAxes(Color color)
-    {
-        foreach (AxisBase axis in Plot.GetStandardAxes())
-        {
-            axis.Label.Font.Color = color;
-            axis.FrameLineStyle.Color = color;
-            axis.MajorTickColor = color;
-            axis.MinorTickColor = color;
-        }
+    [Obsolete("This method is deprecated. Call Plot.Axes.Frame() methods instead.", true)]
+    public void AxisFrame(float left, float right, float bottom, float top) { }
 
-        Plot.Title.Label.Font.Color = color;
-    }
+    [Obsolete("This method is deprecated. Call Plot.Font.Set() instead.", true)]
+    public void SetFont(string fontName) { }
 
-    /// <summary>
-    /// Apply a color to all currently visible grids
-    /// </summary>
-    public void ColorGrids(Color majorColor)
-    {
-        foreach (DefaultGrid grid in Plot.Grids.OfType<DefaultGrid>())
-        {
-            grid.MajorLineStyle.Color = majorColor;
-        }
-    }
+    [Obsolete("This method is deprecated. Call Plot.Font.Automatic() instead.", true)]
+    public void SetBestFonts() { }
 
-    /// <summary>
-    /// Apply a color to all currently visible grids
-    /// </summary>
-    public void ColorGrids(Color majorColor, Color minorColor)
-    {
-        foreach (DefaultGrid grid in Plot.Grids.OfType<DefaultGrid>())
-        {
-            grid.MajorLineStyle.Color = majorColor;
-            grid.MinorLineStyle.Color = minorColor;
-        }
-    }
-
-    /// <summary>
-    /// Set frame thickness for each side of the plot
-    /// </summary>
-    public void AxisFrame(float left, float right, float bottom, float top)
-    {
-        AxisBase[] axes = Plot.GetStandardAxes();
-        axes[0].FrameLineStyle.Width = left;
-        axes[1].FrameLineStyle.Width = right;
-        axes[2].FrameLineStyle.Width = bottom;
-        axes[3].FrameLineStyle.Width = top;
-    }
+    [Obsolete("This method is deprecated. Call Plot.SetStyle() instead.", true)]
+    public void DarkMode() { }
 }

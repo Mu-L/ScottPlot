@@ -1,335 +1,255 @@
-﻿using ScottPlot.Axis;
+﻿using ScottPlot.AxisPanels;
+using ScottPlot.Grids;
 using ScottPlot.Rendering;
-using ScottPlot.Layouts;
-using ScottPlot.Axis.StandardAxes;
-using ScottPlot.Legends;
-using ScottPlot.Benchmarking;
-using ScottPlot.Control;
 using ScottPlot.Stylers;
-using SkiaSharp;
 
 namespace ScottPlot;
 
 public class Plot : IDisposable
 {
-    public List<IXAxis> XAxes { get; } = new();
-    public List<IYAxis> YAxes { get; } = new();
-    public IXAxis TopAxis => XAxes.First(x => x.Edge == Edge.Top);
-    public IXAxis BottomAxis => XAxes.First(x => x.Edge == Edge.Bottom);
-    public IYAxis LeftAxis => YAxes.First(x => x.Edge == Edge.Left);
-    public IYAxis RightAxis => YAxes.First(x => x.Edge == Edge.Right);
+    public List<IPlottable> PlottableList { get; } = [];
+    public PlottableAdder Add { get; }
+    public RenderManager RenderManager { get; }
+    public RenderDetails LastRender => RenderManager.LastRender;
+    public LayoutManager Layout { get; private set; }
 
-    public List<IPanel> Panels { get; } = new();
-    public Panels.TitlePanel Title { get; } = new();
-    public List<IGrid> Grids { get; } = new();
-    public List<ILegend> Legends { get; } = new();
-    public List<IPlottable> Plottables { get; } = new();
-    public AddPlottable Add { get; }
-    public IPalette Palette { get => Add.Palette; set => Add.Palette = value; }
-    public IRenderer Renderer { get; set; } = new StandardRenderer();
-    public ILayoutMaker Layout { get; set; } = new Layouts.StandardLayoutMaker();
-    public AutoScaleMargins Margins { get; } = new();
-    public Color FigureBackground { get; set; } = Colors.White;
-    public Color DataBackground { get; set; } = Colors.White;
-    public IBenchmark Benchmark { get; set; } = new StandardBenchmark();
+    /// <summary>
+    /// Style for the background of the entire figure
+    /// </summary>
+    public BackgroundStyle FigureBackground = new() { Color = Colors.White };
+
+    /// <summary>
+    /// Style for the data area (the area within the axis frames)
+    /// </summary>
+    public BackgroundStyle DataBackground = new() { Color = Colors.Transparent };
+
     public IZoomRectangle ZoomRectangle { get; set; }
-    internal RenderDetails LastRenderInfo { get; set; } = new();
+    public double ScaleFactor { get => ScaleFactorF; set => ScaleFactorF = (float)value; }
+    internal float ScaleFactorF { get; private set; } = 1.0f;
 
-    public AxisStyler Axes { get; }
+    public AxisManager Axes { get; }
 
-    public PlotStyler Style { get; }
+    [Obsolete("This class is deprecated. Use SetStyle() and GetStyle(). See the ScottPlot Cookbook for details.", true)]
+    public PlotStyler Style { get; } = new();
 
-    /// <summary>
-    /// This property provides access to the primary horizontal axis below the plot.
-    /// WARNING: Accessing this property will throw if the first bottom axis is not a standard axis.
-    /// </summary>
-    public IXAxis XAxis
-    {
-        get
-        {
-            var lowerAxes = XAxes.Where(x => x.Edge == Edge.Bottom);
+    public FontStyler Font { get; }
+    public Legend Legend { get; set; }
 
-            if (!lowerAxes.Any())
-                throw new InvalidOperationException("Plot does not contain any bottom axes");
+    public DefaultGrid Grid => Axes.DefaultGrid;
 
-            return lowerAxes.First();
-        }
-    }
-
+    public IPlottable Benchmark { get; set; } = new Plottables.Benchmark();
 
     /// <summary>
-    /// This property provides access to the primary vertical axis to the left of the plot.
-    /// WARNING: Accessing this property will throw if the first bottom axis is not a standard axis.
+    /// This object is locked by the Render() methods.
+    /// Logic that manipulates the plot (UI inputs or editing data)
+    /// can lock this object to prevent rendering artifacts.
     /// </summary>
-    public IYAxis YAxis
-    {
-        get
-        {
-            var leftAxes = YAxes.Where(x => x.Edge == Edge.Left);
+    public object Sync { get; } = new();
 
-            if (!leftAxes.Any())
-                throw new InvalidOperationException("Plot does not contain any left axes");
-
-            return leftAxes.First();
-        }
-    }
+    /// <summary>
+    /// In GUI environments this property holds a reference to the interactive plot control
+    /// </summary>
+    public IPlotControl? PlotControl { get; set; } = null;
 
     public Plot()
     {
-        // setup the default primary X and Y axes
-        IXAxis xAxisPrimary = new BottomAxis();
-        IYAxis yAxisPrimary = new LeftAxis();
-        XAxes.Add(xAxisPrimary);
-        YAxes.Add(yAxisPrimary);
-
-        // add labeless secondary axes to get right side ticks and padding
-        IXAxis xAxisSecondary = new TopAxis();
-        IYAxis yAxisSecondary = new RightAxis();
-        XAxes.Add(xAxisSecondary);
-        YAxes.Add(yAxisSecondary);
-
-        // setup the zoom rectangle
-        ZoomRectangle = new StandardZoomRectangle();
-
-        // add a default grid using the primary axes
-        IGrid grid = new Grids.DefaultGrid(xAxisPrimary, yAxisPrimary);
-        Grids.Add(grid);
-
-        // add a standard legend
-        ILegend legend = new StandardLegend();
-        Legends.Add(legend);
-
-        // setup the helper class that creates and adds plottables to this plot
-        Add = new(this);
-
-        // add styling helper classes
         Axes = new(this);
-        Style = new(this);
+        Add = new(this);
+        Font = new(this);
+        RenderManager = new(this);
+        Legend = new(this);
+        Layout = new(this);
+        ZoomRectangle = new Plottables.ZoomRectangle(this);
     }
 
     public void Dispose()
     {
-        Plottables.Clear();
-        Grids.Clear();
-        Panels.Clear();
-        YAxes.Clear();
-        XAxes.Clear();
+        DataBackground?.Dispose();
+        FigureBackground?.Dispose();
+        PlottableList.Clear();
     }
 
-    #region Axis Management
-
-    internal AxisBase[] GetStandardAxes()
-    {
-        // TODO: throw if custom axes in use
-        return new AxisBase[]
-        {
-            (AxisBase)XAxes[0],
-            (AxisBase)XAxes[1],
-            (AxisBase)YAxes[0],
-            (AxisBase)YAxes[1],
-        };
-    }
-
-    internal IAxis[] GetAllAxes() => XAxes.Select(x => (IAxis)x).Concat(YAxes).ToArray();
-
-    internal IPanel[] GetAllPanels() => XAxes.Select(x => (IPanel)x)
-        .Concat(YAxes)
-        .Concat(Panels)
-        .Concat(new[] { Title })
-        .ToArray();
-
-    //[Obsolete("WARNING: NOT ALL LIMITS ARE AFFECTED")]
-    public void SetAxisLimits(double left, double right, double bottom, double top)
-    {
-        XAxis.Min = left;
-        XAxis.Max = right;
-        YAxis.Min = bottom;
-        YAxis.Max = top;
-    }
-
-    //[Obsolete("WARNING: NOT ALL LIMITS ARE AFFECTED")]
-    public void SetAxisLimits(double? left = null, double? right = null, double? bottom = null, double? top = null)
-    {
-        XAxis.Min = left ?? XAxis.Min;
-        XAxis.Max = right ?? XAxis.Max;
-        YAxis.Min = bottom ?? YAxis.Min;
-        YAxis.Max = top ?? YAxis.Max;
-    }
-
-    //[Obsolete("WARNING: NOT ALL LIMITS ARE AFFECTED")]
-    public void SetAxisLimits(CoordinateRect rect)
-    {
-        SetAxisLimits(rect.XMin, rect.XMax, rect.YMin, rect.YMax);
-    }
-
-    //[Obsolete("WARNING: NOT ALL LIMITS ARE AFFECTED")]
-    public void SetAxisLimits(AxisLimits rect)
-    {
-        SetAxisLimits(rect.Rect);
-    }
-
-    public AxisLimits GetAxisLimits()
-    {
-        return new AxisLimits(XAxis.Min, XAxis.Max, YAxis.Min, YAxis.Max);
-    }
-
-    public MultiAxisLimits GetMultiAxisLimits()
-    {
-        MultiAxisLimits limits = new();
-        XAxes.ForEach(xAxis => limits.RememberLimits(xAxis, xAxis.Min, xAxis.Max));
-        YAxes.ForEach(yAxis => limits.RememberLimits(yAxis, yAxis.Min, yAxis.Max));
-        return limits;
-    }
+    #region Pixel/Coordinate Conversion
 
     /// <summary>
-    /// Automatically scale the axis limits to fit the data.
-    /// Note: This used to be AxisAuto().
-    /// Note: Margin size can be customized by editing properties of <see cref="Margins"/>
+    /// Return the location on the screen (pixel) for a location on the plot (coordinates) on the default axes.
+    /// The figure size and layout referenced will be the one from the last render.
     /// </summary>
-    public void AutoScale(bool tight = false)
-    {
-        // reset limits for all axes
-        XAxes.ForEach(xAxis => xAxis.Range.Reset());
-        YAxes.ForEach(yAxis => yAxis.Range.Reset());
-
-        // assign default axes to plottables without axes
-        Rendering.Common.ReplaceNullAxesWithDefaults(this);
-
-        // expand all axes by the limits of each plot
-        foreach (IPlottable plottable in Plottables)
-        {
-            AutoScale(plottable.Axes.XAxis, plottable.Axes.YAxis, tight);
-        }
-    }
+    public Pixel GetPixel(Coordinates coordinates) => GetPixel(coordinates, Axes.Bottom, Axes.Left);
 
     /// <summary>
-    /// Automatically scale the given axes to fit the data in plottables which use them
+    /// Return the location on the screen (pixel) for a location on the plot (coordinates) on the given axes.
+    /// The figure size and layout referenced will be the one from the last render.
     /// </summary>
-    public void AutoScale(IXAxis xAxis, IYAxis yAxis, bool tight = false)
+    public Pixel GetPixel(Coordinates coordinates, IXAxis xAxis, IYAxis yAxis)
     {
-        // reset limits only for these axes
-        xAxis.Range.Reset();
-        yAxis.Range.Reset();
+        float xPixel = xAxis.GetPixel(coordinates.X, RenderManager.LastRender.DataRect);
+        float yPixel = yAxis.GetPixel(coordinates.Y, RenderManager.LastRender.DataRect);
 
-        // assign default axes to plottables without axes
-        Rendering.Common.ReplaceNullAxesWithDefaults(this);
-
-        // expand all axes by the limits of each plot
-        foreach (IPlottable plottable in Plottables)
-        {
-            AxisLimits limits = plottable.GetAxisLimits();
-            plottable.Axes.YAxis.Range.Expand(limits.Rect.YRange);
-            plottable.Axes.XAxis.Range.Expand(limits.Rect.XRange);
-        }
-
-        // apply margins
-        if (!tight)
-        {
-            XAxes.ForEach(xAxis => xAxis.Range.ZoomFrac(Margins.ZoomFracX));
-            YAxes.ForEach(yAxis => yAxis.Range.ZoomFrac(Margins.ZoomFracY));
-        }
-    }
-
-    #endregion
-
-    #region Mouse Interaction
-
-    /// <summary>
-    /// Apply a click-drag pan operation to the plot
-    /// </summary>
-    public void MousePan(MultiAxisLimits originalLimits, Pixel mouseDown, Pixel mouseNow)
-    {
-        float pixelDeltaX = -(mouseNow.X - mouseDown.X);
-        float pixelDeltaY = mouseNow.Y - mouseDown.Y;
-
-        // restore mousedown limits
-        XAxes.ForEach(xAxis => originalLimits.RestoreLimits(xAxis));
-        YAxes.ForEach(yAxis => originalLimits.RestoreLimits(yAxis));
-
-        // pan in the direction opposite of the mouse movement
-        XAxes.ForEach(xAxis => xAxis.Range.PanMouse(pixelDeltaX, LastRenderInfo.DataRect.Width));
-        YAxes.ForEach(yAxis => yAxis.Range.PanMouse(pixelDeltaY, LastRenderInfo.DataRect.Height));
-    }
-
-    /// <summary>
-    /// Apply a click-drag zoom operation to the plot
-    /// </summary>
-    public void MouseZoom(MultiAxisLimits originalLimits, Pixel mouseDown, Pixel mouseNow)
-    {
-        float pixelDeltaX = mouseNow.X - mouseDown.X;
-        float pixelDeltaY = -(mouseNow.Y - mouseDown.Y);
-
-        // restore mousedown limits
-        XAxes.ForEach(xAxis => originalLimits.RestoreLimits(xAxis));
-        YAxes.ForEach(yAxis => originalLimits.RestoreLimits(yAxis));
-
-        // apply zoom for each axis
-        XAxes.ForEach(xAxis => xAxis.Range.ZoomMouseDelta(pixelDeltaX, LastRenderInfo.DataRect.Width));
-        YAxes.ForEach(yAxis => yAxis.Range.ZoomMouseDelta(pixelDeltaY, LastRenderInfo.DataRect.Height));
-    }
-
-    /// <summary>
-    /// Zoom into the coordinate corresponding to the given pixel.
-    /// Fractional values >1 zoom in and <1 zoom out.
-    /// </summary>
-    public void MouseZoom(double fracX, double fracY, Pixel pixel)
-    {
-        Coordinates mouseCoordinate = GetCoordinate(pixel);
-        MultiAxisLimits originalLimits = GetMultiAxisLimits();
-
-        // restore mousedown limits
-        XAxes.ForEach(xAxis => originalLimits.RestoreLimits(xAxis));
-        YAxes.ForEach(yAxis => originalLimits.RestoreLimits(yAxis));
-
-        // apply zoom for each axis
-        XAxes.ForEach(xAxis => xAxis.Range.ZoomFrac(fracX, xAxis.GetCoordinate(pixel.X, LastRenderInfo.DataRect)));
-        YAxes.ForEach(yAxis => yAxis.Range.ZoomFrac(fracY, yAxis.GetCoordinate(pixel.Y, LastRenderInfo.DataRect)));
-    }
-
-    /// <summary>
-    /// Update the shape of the zoom rectangle
-    /// </summary>
-    /// <param name="mouseDown">Location of the mouse at the start of the drag</param>
-    /// <param name="mouseNow">Location of the mouse now (after dragging)</param>
-    /// <param name="vSpan">If true, shade the full region between two X positions</param>
-    /// <param name="hSpan">If true, shade the full region between two Y positions</param>
-    public void MouseZoomRectangle(Pixel mouseDown, Pixel mouseNow, bool vSpan, bool hSpan)
-    {
-        ZoomRectangle.Update(mouseDown, mouseNow);
-        ZoomRectangle.VerticalSpan = vSpan;
-        ZoomRectangle.HorizontalSpan = hSpan;
-    }
-
-    /// <summary>
-    /// Return the pixel for a specific coordinate using measurements from the most recent render.
-    /// </summary>
-    public Pixel GetPixel(Coordinates coord)
-    {
-        PixelRect dataRect = LastRenderInfo.DataRect;
-        float x = XAxis.GetPixel(coord.X, dataRect);
-        float y = YAxis.GetPixel(coord.Y, dataRect);
-        return new Pixel(x, y);
+        return new Pixel(xPixel, yPixel).Multiply(ScaleFactorF);
     }
 
     /// <summary>
     /// Return the coordinate for a specific pixel using measurements from the most recent render.
     /// </summary>
-    public Coordinates GetCoordinate(Pixel pixel, IXAxis? xAxis = null, IYAxis? yAxis = null)
+    public Coordinates GetCoordinates(Pixel pixel, IXAxis? xAxis = null, IYAxis? yAxis = null)
     {
-        // TODO: multi-axis support
-        PixelRect dataRect = LastRenderInfo.DataRect;
-        double x = XAxis.GetCoordinate(pixel.X, dataRect);
-        double y = YAxis.GetCoordinate(pixel.Y, dataRect);
+        Pixel scaledPx = pixel.Divide(ScaleFactorF);
+        PixelRect dataRect = RenderManager.LastRender.DataRect;
+        double x = (xAxis ?? Axes.Bottom).GetCoordinate(scaledPx.X, dataRect);
+        double y = (yAxis ?? Axes.Left).GetCoordinate(scaledPx.Y, dataRect);
         return new Coordinates(x, y);
+    }
+
+    /// <summary>
+    /// Return the coordinate for a specific pixel using measurements from the most recent render.
+    /// </summary>
+    public Coordinates GetCoordinates(float x, float y, IXAxis? xAxis = null, IYAxis? yAxis = null)
+    {
+        Pixel px = new(x, y);
+        return GetCoordinates(px, xAxis, yAxis);
+    }
+
+    /// <summary>
+    /// Return a coordinate rectangle centered at a pixel.  Uses measurements
+    /// from the most recent render.
+    /// <param name="x">Center point pixel's x</param>
+    /// <param name="y">Center point pixel's y</param>
+    /// <param name="radius">Radius in pixels</param>
+    /// <returns>The coordinate rectangle</returns>
+    /// </summary>
+    public CoordinateRect GetCoordinateRect(float x, float y, float radius = 10, IXAxis? xAxis = null, IYAxis? yAxis = null)
+    {
+        float leftPx = (x - radius) / ScaleFactorF;
+        float rightPx = (x + radius) / ScaleFactorF;
+        float topPx = (y - radius) / ScaleFactorF;
+        float bottomPx = (y + radius) / ScaleFactorF;
+
+        PixelRect dataRect = RenderManager.LastRender.DataRect;
+        double x1 = (xAxis ?? Axes.Bottom).GetCoordinate(leftPx, dataRect);
+        double x2 = (xAxis ?? Axes.Bottom).GetCoordinate(rightPx, dataRect);
+        double y1 = (yAxis ?? Axes.Left).GetCoordinate(topPx, dataRect);
+        double y2 = (yAxis ?? Axes.Left).GetCoordinate(bottomPx, dataRect);
+
+        // rectify rectangles for inverted axes
+        // https://github.com/ScottPlot/ScottPlot/issues/3731
+        double left = Math.Min(x1, x2);
+        double right = Math.Max(x1, x2);
+        double bottom = Math.Min(y1, y2);
+        double top = Math.Max(y1, y2);
+
+        return new CoordinateRect(left, right, bottom, top);
+    }
+
+    /// <summary>
+    /// Return a coordinate rectangle centered at a pixel.  Uses measurements
+    /// from the most recent render.
+    /// <param name="pixel">Center point pixel</param>
+    /// <param name="radius">Radius in pixels</param>
+    /// <returns>The coordinate rectangle</returns>
+    /// </summary>
+    public CoordinateRect GetCoordinateRect(Pixel pixel, float radius = 10, IXAxis? xAxis = null, IYAxis? yAxis = null)
+    {
+        return GetCoordinateRect(pixel.X, pixel.Y, radius, xAxis, yAxis);
+    }
+
+    /// <summary>
+    /// Return a coordinate rectangle centered at a coordinate pair with the
+    /// radius specified in pixels.  Uses measurements from the most recent
+    /// render.
+    /// <param name="coordinates">Center point in coordinate units</param>
+    /// <param name="radius">Radius in pixels</param>
+    /// <returns>The coordinate rectangle</returns>
+    /// </summary>
+    public CoordinateRect GetCoordinateRect(Coordinates coordinates, float radius = 10, IXAxis? xAxis = null, IYAxis? yAxis = null)
+    {
+        radius /= ScaleFactorF;
+
+        PixelRect dataRect = RenderManager.LastRender.DataRect;
+        double radiusX = (xAxis ?? Axes.Bottom).GetCoordinateDistance(radius, dataRect);
+        double radiusY = (yAxis ?? Axes.Left).GetCoordinateDistance(radius, dataRect);
+        return coordinates.ToRect(radiusX, radiusY);
+    }
+
+    /// <summary>
+    /// Get the axis under a given pixel
+    /// </summary>
+    /// <param name="pixel">Point</param>
+    /// <returns>The axis at <paramref name="pixel" /> (or null)</returns>
+    public IAxis? GetAxis(Pixel pixel)
+    {
+        IPanel? panel = GetPanel(pixel, axesOnly: true);
+        return panel is IAxis axis ? axis : null;
+    }
+
+    /// <summary>
+    /// Get the panel under a given pixel
+    /// </summary>
+    /// <param name="pixel">Point</param>
+    /// <returns>The panel at <paramref name="pixel" /> (or null)</returns>
+    public IPanel? GetPanel(Pixel pixel, bool axesOnly)
+    {
+        PixelRect dataRect = RenderManager.LastRender.Layout.DataRect;
+
+        // Reverse here so the "highest" axis is returned in the case some overlap.
+        var panels = axesOnly
+            ? Axes.GetPanels().Reverse().OfType<IAxis>()
+            : Axes.GetPanels().Reverse();
+
+        foreach (IPanel panel in panels)
+        {
+            float axisPanelSize = RenderManager.LastRender.Layout.PanelSizes[panel];
+            float axisPanelOffset = RenderManager.LastRender.Layout.PanelOffsets[panel];
+            PixelRect axisRect = panel.GetPanelRect(dataRect, axisPanelSize, axisPanelOffset);
+            if (axisRect.Contains(pixel))
+            {
+                return panel;
+            }
+        }
+
+        return null;
     }
 
     #endregion
 
     #region Rendering and Image Creation
 
+    [Obsolete("Call GetImage() to create a new image, " +
+        "RenderInMemory() to force a render for layout purposes, " +
+        "or Render() to render onto an existing SkiaSharp surface or canvas.", true)]
+    public void Render(int width = 400, int height = 300) { }
+
+    /// <summary>
+    /// Create a new image of the given dimensions, render the plot onto it, and return it.
+    /// </summary>
+    public void RenderInMemory(int width = 400, int height = 300) => GetImage(width, height);
+
+    /// <summary>
+    /// Render onto an existing canvas with the given dimensions
+    /// </summary>
+    public void Render(SKCanvas canvas, int width, int height)
+    {
+        PixelRect rect = new(0, width, height, 0);
+        Render(canvas, rect);
+    }
+
+    /// <summary>
+    /// Render onto an existing canvas inside the given rectangle
+    /// </summary>
+    public void Render(SKCanvas canvas, PixelRect rect)
+    {
+        lock (Sync)
+        {
+            RenderManager.Render(canvas, rect);
+        }
+    }
+
+    /// <summary>
+    /// Render onto an existing canvas of a surface over the local clip bounds
+    /// </summary>
     public void Render(SKSurface surface)
     {
-        LastRenderInfo = Renderer.Render(surface, this);
+        RenderManager.Render(surface.Canvas, surface.Canvas.LocalClipBounds.ToPixelRect());
     }
 
     public Image GetImage(int width, int height)
@@ -341,88 +261,406 @@ public class Plot : IDisposable
             throw new ArgumentException($"{nameof(height)} must be greater than 0");
 
         SKImageInfo info = new(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
-        using SKSurface surface = SKSurface.Create(info);
-        if (surface is null)
-            throw new NullReferenceException($"invalid SKImageInfo");
+        using SKSurface surface = SKSurface.Create(info)
+            ?? throw new NullReferenceException($"invalid SKImageInfo");
 
-        Render(surface);
-        return new(surface.Snapshot());
+        Render(surface.Canvas, width, height);
+        return new Image(surface);
+    }
+
+    [Obsolete("This method is deprecated. Use GetPngHtml() or GetSvgHtml()", true)]
+    public string GetImageHtml(int width, int height)
+    {
+        return GetPngHtml(width, height);
     }
 
     /// <summary>
     /// Render the plot and return an HTML img element containing a Base64-encoded PNG
     /// </summary>
-    public string GetImageHtml(int width, int height)
+    public string GetPngHtml(int width, int height, string classContent = "", string styleContent = "")
     {
         Image img = GetImage(width, height);
         byte[] bytes = img.GetImageBytes();
-        return ImageOperations.GetImageHtml(bytes);
+        return ImageOperations.GetImageHtml(bytes, "png", classContent, styleContent);
     }
 
-    public void SaveJpeg(string filePath, int width, int height, int quality = 85)
+    /// <summary>
+    /// Render the plot and return a plain text SVG element suitable for insertion into HTML
+    /// </summary>
+    public string GetSvgHtml(int width, int height)
     {
-        using Image image = GetImage(width, height);
-        image.SaveJpeg(filePath, quality);
+        return GetSvgXml(width, height);
     }
 
-    public void SavePng(string filePath, int width, int height)
+    public SavedImageInfo SaveJpeg(string filePath, int width, int height, int quality = 85)
     {
         using Image image = GetImage(width, height);
-        image.SavePng(filePath);
+        return image.SaveJpeg(filePath, quality).WithRenderDetails(RenderManager.LastRender);
     }
 
-    public void SaveBmp(string filePath, int width, int height)
+    public SavedImageInfo SavePng(string filePath, int width, int height)
     {
         using Image image = GetImage(width, height);
-        image.SaveBmp(filePath);
+        return image.SavePng(filePath).WithRenderDetails(RenderManager.LastRender);
     }
 
-    public void SaveWebp(string filePath, int width, int height, int quality = 85)
+    public SavedImageInfo SaveBmp(string filePath, int width, int height)
     {
         using Image image = GetImage(width, height);
-        image.SaveWebp(filePath, quality);
+        return image.SaveBmp(filePath).WithRenderDetails(RenderManager.LastRender);
     }
 
-    public void Save(string filePath, int width, int height, ImageFormat format = ImageFormat.Png, int quality = 85)
+    public SavedImageInfo SaveWebp(string filePath, int width, int height, int quality = 85)
     {
         using Image image = GetImage(width, height);
-        image.Save(filePath, format, quality);
+        return image.SaveWebp(filePath, quality).WithRenderDetails(RenderManager.LastRender);
     }
+
+    public SavedImageInfo SaveSvg(string filePath, int width, int height)
+    {
+        string xml = GetSvgXml(width, height);
+        File.WriteAllText(filePath, xml);
+        return new SavedImageInfo(filePath, xml.Length).WithRenderDetails(RenderManager.LastRender);
+    }
+
+    public string GetSvgXml(int width, int height)
+    {
+        using SvgImage svg = new(width, height);
+        bool originalClearState = RenderManager.ClearCanvasBeforeEachRender;
+        RenderManager.ClearCanvasBeforeEachRender = false;
+        Render(svg.Canvas, width, height);
+        RenderManager.ClearCanvasBeforeEachRender = originalClearState;
+        return svg.GetXml();
+    }
+
+    public SavedImageInfo Save(string filePath, int width, int height)
+    {
+        ImageFormat format = ImageFormats.FromFilename(filePath);
+        return Save(filePath, width, height, format);
+    }
+
+    public SavedImageInfo Save(string filePath, int width, int height, ImageFormat format, int quality = 85)
+    {
+        if (format == ImageFormat.Svg)
+        {
+            return SaveSvg(filePath, width, height).WithRenderDetails(RenderManager.LastRender);
+        }
+
+        if (format.IsRasterFormat())
+        {
+            using Image image = GetImage(width, height);
+            return image.Save(filePath, format, quality).WithRenderDetails(RenderManager.LastRender);
+        }
+
+        throw new NotImplementedException(format.ToString());
+    }
+
+    public byte[] GetImageBytes(int width, int height, ImageFormat format = ImageFormat.Bmp)
+    {
+        using Image image = GetImage(width, height);
+        byte[] bytes = image.GetImageBytes(format);
+        return bytes;
+    }
+
+    /// <summary>
+    /// Returns the content of the legend as a raster image
+    /// </summary>
+    public Image GetLegendImage() => Legend.GetImage();
+
+    /// <summary>
+    /// Returns the content of the legend as SVG (vector) image
+    /// </summary>
+    public string GetLegendSvgXml() => Legend.GetSvgXml();
 
     #endregion
 
-    #region Shortcuts
+    #region Helper Methods
 
     /// <summary>
-    /// Clears the <see cref="Plottables"/> list
+    /// Return contents of <see cref="PlottableList"/>.
     /// </summary>
-    public void Clear() => Plottables.Clear();
-
-    /// <summary>
-    /// Return the first default grid in use.
-    /// Throws an exception if no default grids exist.
-    /// </summary>
-    public Grids.DefaultGrid GetDefaultGrid()
+    public IEnumerable<IPlottable> GetPlottables()
     {
-        IEnumerable<Grids.DefaultGrid> defaultGrids = Grids.OfType<Grids.DefaultGrid>();
-        if (defaultGrids.Any())
-            return defaultGrids.First();
-        else
-            throw new InvalidOperationException("The plot has no default grids");
+        return PlottableList;
     }
 
     /// <summary>
-    /// Return the first default legend in use.
-    /// Throws an exception if no default legends exist.
+    /// Return all plottables in <see cref="PlottableList"/> of the given type.
     /// </summary>
-    public Legends.StandardLegend GetLegend()
+    public IEnumerable<T> GetPlottables<T>() where T : IPlottable
     {
-        IEnumerable<Legends.StandardLegend> standardLegends = Legends.OfType<Legends.StandardLegend>();
-        if (standardLegends.Any())
-            return standardLegends.First();
-        else
-            throw new InvalidOperationException("The plot has no standard legends");
+        return PlottableList.OfType<T>();
     }
+
+    /// <summary>
+    /// Remove the given plottable from the <see cref="PlottableList"/>.
+    /// </summary>
+    public void Remove(IPlottable plottable)
+    {
+        while (PlottableList.Contains(plottable))
+        {
+            PlottableList.Remove(plottable);
+        }
+    }
+
+    /// <summary>
+    /// Remove the given Panel from the <see cref="Axes"/>.
+    /// </summary>
+    public void Remove(IPanel panel)
+    {
+        Axes.Remove(panel);
+    }
+
+    /// <summary>
+    /// Remove the given Axis from the <see cref="Axes"/>.
+    /// </summary>
+    public void Remove(IAxis axis)
+    {
+        Axes.Remove(axis);
+    }
+
+    /// <summary>
+    /// Remove all items of a specific type from the <see cref="PlottableList"/>.
+    /// </summary>
+    public void Remove(Type plotType)
+    {
+        List<IPlottable> itemsToRemove = PlottableList.Where(x => x.GetType() == plotType).ToList();
+
+        foreach (IPlottable item in itemsToRemove)
+        {
+            PlottableList.Remove(item);
+        }
+    }
+
+    /// <summary>
+    /// Remove a all instances of a specific type from the <see cref="PlottableList"/>.
+    /// </summary>
+    /// <typeparam name="T">Type of <see cref="IPlottable"/> to be removed</typeparam>
+    public void Remove<T>() where T : IPlottable
+    {
+        PlottableList.RemoveAll(x => x is T);
+    }
+
+    /// <summary>
+    /// Remove all instances of a specific type from the <see cref="PlottableList"/> 
+    /// that meet the <paramref name="predicate"/> criteraia.
+    /// </summary>
+    /// <param name="predicate">A function to test each element for a condition.</param>
+    /// <typeparam name="T">Type of <see cref="IPlottable"/> to be removed</typeparam>
+    public void Remove<T>(Func<T, bool> predicate) where T : IPlottable
+    {
+        List<T> toRemove = PlottableList.OfType<T>().Where(predicate).ToList();
+        toRemove.ForEach(x => PlottableList.Remove(x));
+    }
+
+    /// <summary>
+    /// Move the indicated plottable to the end of the list so it is rendered last
+    /// and appears above all other plottables.
+    /// </summary>
+    public void MoveToTop(IPlottable plottable) => MoveToFront(plottable);
+
+    /// <summary>
+    /// Move the indicated plottable to the start of the list so it is rendered first
+    /// and appears below all other plottables.
+    /// </summary>
+    public void MoveToBottom(IPlottable plottable) => MoveToBack(plottable);
+
+    /// <summary>
+    /// Move the indicated plottable to the end of the list so it is rendered last
+    /// </summary>
+    public void MoveToFront(IPlottable plottable)
+    {
+        // TODO: https://github.com/ScottPlot/ScottPlot/issues/3660
+        int index = PlottableList.IndexOf(plottable);
+
+        if (index < 0)
+            return;
+
+        PlottableList.RemoveAt(index);
+        PlottableList.Add(plottable);
+    }
+
+    /// <summary>
+    /// Move the indicated plottable to the start of the list so it is rendered first
+    /// </summary>
+    public void MoveToBack(IPlottable plottable)
+    {
+        // TODO: https://github.com/ScottPlot/ScottPlot/issues/3660
+        int index = PlottableList.IndexOf(plottable);
+
+        if (index < 0)
+            return;
+
+        PlottableList.RemoveAt(index);
+        PlottableList.Insert(0, plottable);
+    }
+
+    /// <summary>
+    /// Disable visibility for all axes and grids
+    /// </summary>
+    public void HideAxesAndGrid(bool showTitle = true)
+    {
+        Axes.Frameless(showTitle);
+        HideGrid();
+    }
+
+    /// <summary>
+    /// Disable visibility for all grids
+    /// </summary>
+    public void HideGrid()
+    {
+        Axes.AllGrids.ForEach(x => x.IsVisible = false);
+    }
+
+    /// <summary>
+    /// Enable visibility for all grids
+    /// </summary>
+    public void ShowGrid()
+    {
+        Axes.AllGrids.ForEach(x => x.IsVisible = true);
+    }
+
+    /// <summary>
+    /// Helper method for setting visibility of the <see cref="Legend"/>
+    /// </summary>
+    public Legend ShowLegend()
+    {
+        Legend.IsVisible = true;
+        return Legend;
+    }
+
+    /// <summary>
+    /// Helper method for setting visibility of the <see cref="Legend"/>
+    /// and setting <see cref="Legend.Location"/> to the provided one.
+    /// </summary>
+    public Legend ShowLegend(Alignment alignment)
+    {
+        Legend.IsVisible = true;
+        Legend.Alignment = alignment;
+        return Legend;
+    }
+
+    /// <summary>
+    /// Helper method for setting the Legend's IsVisible, Alignment, and Orientation
+    /// properties all at once.
+    /// </summary>
+    public Legend ShowLegend(Alignment alignment, Orientation orientation)
+    {
+        Legend.IsVisible = true;
+        Legend.Alignment = alignment;
+        Legend.Orientation = orientation;
+        return Legend;
+    }
+
+    /// <summary>
+    /// Helper method for displaying specific items in the legend
+    /// </summary>
+    public Legend ShowLegend(IEnumerable<LegendItem> items, Alignment location = Alignment.LowerRight)
+    {
+        ShowLegend(location);
+        Legend.ManualItems.Clear();
+        Legend.ManualItems.AddRange(items);
+        return Legend;
+    }
+
+    /// <summary>
+    /// Hide the default legend (inside the data area) and create a new legend panel 
+    /// placed on the edge of the figure outside the data area.
+    /// </summary>
+    /// <returns></returns>
+    public Panels.LegendPanel ShowLegend(Edge edge)
+    {
+        HideLegend();
+
+        Legend.Orientation = edge.IsVertical()
+            ? Orientation.Vertical
+            : Orientation.Horizontal;
+
+        Panels.LegendPanel legendPanel = new(Legend)
+        {
+            Edge = edge,
+            Alignment = Alignment.MiddleCenter,
+        };
+
+        Axes.AddPanel(legendPanel);
+
+        return legendPanel;
+    }
+
+    /// <summary>
+    /// Helper method for setting visibility of the <see cref="Legend"/>
+    /// </summary>
+    public Legend HideLegend()
+    {
+        Legend.IsVisible = false;
+        return Legend;
+    }
+
+    /// <summary>
+    /// Clears the <see cref="PlottableList"/> list
+    /// </summary>
+    public void Clear() => PlottableList.Clear();
+
+    /// <summary>
+    /// Clear a all instances of a specific type from the <see cref="PlottableList"/>.
+    /// </summary>
+    /// <typeparam name="T">Type of <see cref="IPlottable"/> to be cleared</typeparam>
+    public void Clear<T>() where T : IPlottable
+    {
+        Remove<T>();
+    }
+
+    /// <summary>
+    /// Shortcut to set text of the <see cref="TitlePanel"/> Label.
+    /// Assign properties of <see cref="TitlePanel"/> Label to customize size, color, font, etc.
+    /// </summary>
+    public void Title(string text, float? size = null)
+    {
+        Axes.Title.Label.Text = text;
+        Axes.Title.IsVisible = !string.IsNullOrWhiteSpace(text);
+        if (size.HasValue)
+            Axes.Title.Label.FontSize = size.Value;
+    }
+
+    /// <summary>
+    /// Shortcut to set text of the <see cref="BottomAxis"/> Label
+    /// Assign properties of <see cref="BottomAxis"/> Label to customize size, color, font, etc.
+    /// </summary>
+    public void XLabel(string label, float? size = null)
+    {
+        Axes.Bottom.Label.Text = label;
+        if (size.HasValue)
+            Axes.Bottom.Label.FontSize = size.Value;
+    }
+
+    /// <summary>
+    /// Shortcut to set text of the <see cref="BottomAxis"/> Label
+    /// Assign properties of <see cref="BottomAxis"/> Label to customize size, color, font, etc.
+    /// </summary>
+    public void YLabel(string label, float? size = null)
+    {
+        Axes.Left.Label.Text = label;
+        if (size.HasValue)
+            Axes.Left.Label.FontSize = size.Value;
+    }
+
+    [Obsolete("This method is deprecated. Access Plot.Grid instead.", true)]
+    public static DefaultGrid GetDefaultGrid() => null!;
+
+    /// <summary>
+    /// Return the current style settings for this plot
+    /// </summary>
+    public PlotStyle GetStyle() => PlotStyle.FromPlot(this);
+
+    /// <summary>
+    /// Apply the given style settings to this plot
+    /// </summary>
+    public void SetStyle(PlotStyle style) => style.Apply(this);
+
+    /// <summary>
+    /// Apply the style settings from the given plot to this plot
+    /// </summary>
+    public void SetStyle(Plot otherPlot) => SetStyle(otherPlot.GetStyle());
 
     #endregion
 
@@ -430,7 +668,7 @@ public class Plot : IDisposable
 
     public void Developer_ShowAxisDetails(bool enable = true)
     {
-        foreach (IPanel panel in GetAllAxes())
+        foreach (IPanel panel in Axes.GetAxes())
         {
             panel.ShowDebugInformation = enable;
         }

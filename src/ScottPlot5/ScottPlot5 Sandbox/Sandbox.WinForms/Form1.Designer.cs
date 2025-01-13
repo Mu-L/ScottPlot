@@ -28,28 +28,29 @@ partial class Form1
     /// </summary>
     private void InitializeComponent()
     {
-            this.formsPlot1 = new ScottPlot.WinForms.FormsPlot();
-            this.SuspendLayout();
-            // 
-            // formsPlot1
-            // 
-            this.formsPlot1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.formsPlot1.Location = new System.Drawing.Point(0, 0);
-            this.formsPlot1.Name = "formsPlot1";
-            this.formsPlot1.Size = new System.Drawing.Size(800, 450);
-            this.formsPlot1.TabIndex = 0;
-            // 
-            // Form1
-            // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(800, 450);
-            this.Controls.Add(this.formsPlot1);
-            this.Name = "Form1";
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "ScottPlot 5 - Windows Forms Sandbox";
-            this.ResumeLayout(false);
-
+        formsPlot1 = new ScottPlot.WinForms.FormsPlot();
+        SuspendLayout();
+        // 
+        // formsPlot1
+        // 
+        formsPlot1.DisplayScale = 1F;
+        formsPlot1.Dock = DockStyle.Fill;
+        formsPlot1.Location = new Point(0, 0);
+        formsPlot1.Name = "formsPlot1";
+        formsPlot1.Size = new Size(669, 415);
+        formsPlot1.TabIndex = 0;
+        // 
+        // Form1
+        // 
+        AutoScaleDimensions = new SizeF(7F, 15F);
+        AutoScaleMode = AutoScaleMode.Font;
+        ClientSize = new Size(669, 415);
+        Controls.Add(formsPlot1);
+        Margin = new Padding(4, 3, 4, 3);
+        Name = "Form1";
+        StartPosition = FormStartPosition.CenterScreen;
+        Text = "ScottPlot 5 - Windows Forms Sandbox";
+        ResumeLayout(false);
     }
 
     #endregion

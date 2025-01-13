@@ -28,99 +28,100 @@ partial class MainMenuForm
     /// </summary>
     private void InitializeComponent()
     {
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainMenuForm));
-            this.tableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
-            this.panel1 = new System.Windows.Forms.Panel();
-            this.pictureBox1 = new System.Windows.Forms.PictureBox();
-            this.label2 = new System.Windows.Forms.Label();
-            this.label1 = new System.Windows.Forms.Label();
-            this.tableLayoutPanel1.SuspendLayout();
-            this.panel1.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).BeginInit();
-            this.SuspendLayout();
-            // 
-            // tableLayoutPanel1
-            // 
-            this.tableLayoutPanel1.AutoScroll = true;
-            this.tableLayoutPanel1.AutoSize = true;
-            this.tableLayoutPanel1.ColumnCount = 1;
-            this.tableLayoutPanel1.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
-            this.tableLayoutPanel1.Controls.Add(this.panel1, 0, 0);
-            this.tableLayoutPanel1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.tableLayoutPanel1.Location = new System.Drawing.Point(0, 0);
-            this.tableLayoutPanel1.Name = "tableLayoutPanel1";
-            this.tableLayoutPanel1.RowCount = 1;
-            this.tableLayoutPanel1.RowStyles.Add(new System.Windows.Forms.RowStyle());
-            this.tableLayoutPanel1.Size = new System.Drawing.Size(533, 469);
-            this.tableLayoutPanel1.TabIndex = 3;
-            // 
-            // panel1
-            // 
-            this.panel1.BackColor = System.Drawing.SystemColors.Control;
-            this.panel1.Controls.Add(this.pictureBox1);
-            this.panel1.Controls.Add(this.label2);
-            this.panel1.Controls.Add(this.label1);
-            this.panel1.Location = new System.Drawing.Point(3, 3);
-            this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(507, 81);
-            this.panel1.TabIndex = 0;
-            // 
-            // pictureBox1
-            // 
-            this.pictureBox1.Image = ((System.Drawing.Image)(resources.GetObject("pictureBox1.Image")));
-            this.pictureBox1.Location = new System.Drawing.Point(8, 8);
-            this.pictureBox1.Name = "pictureBox1";
-            this.pictureBox1.Size = new System.Drawing.Size(64, 64);
-            this.pictureBox1.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
-            this.pictureBox1.TabIndex = 0;
-            this.pictureBox1.TabStop = false;
-            // 
-            // label2
-            // 
-            this.label2.AutoSize = true;
-            this.label2.Font = new System.Drawing.Font("Segoe UI Semilight", 14.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            this.label2.Location = new System.Drawing.Point(80, 41);
-            this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(115, 25);
-            this.label2.TabIndex = 2;
-            this.label2.Text = "Version 5.0.0";
-            // 
-            // label1
-            // 
-            this.label1.AutoSize = true;
-            this.label1.Font = new System.Drawing.Font("Segoe UI", 20.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point);
-            this.label1.Location = new System.Drawing.Point(78, 9);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(399, 37);
-            this.label1.TabIndex = 1;
-            this.label1.Text = "ScottPlot Windows Forms Demo";
-            // 
-            // MainMenuForm
-            // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.AutoScroll = true;
-            this.ClientSize = new System.Drawing.Size(533, 469);
-            this.Controls.Add(this.tableLayoutPanel1);
-            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.Name = "MainMenuForm";
-            this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-            this.Text = "ScottPlot Demo";
-            this.Load += new System.EventHandler(this.MainMenuForm_Load);
-            this.tableLayoutPanel1.ResumeLayout(false);
-            this.panel1.ResumeLayout(false);
-            this.panel1.PerformLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.pictureBox1)).EndInit();
-            this.ResumeLayout(false);
-            this.PerformLayout();
-
+        System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainMenuForm));
+        pictureBox1 = new PictureBox();
+        label2 = new Label();
+        label1 = new Label();
+        tbSearch = new TextBox();
+        label3 = new Label();
+        demoWindowScrollList1 = new DemoWindowScrollList();
+        ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
+        SuspendLayout();
+        // 
+        // pictureBox1
+        // 
+        pictureBox1.Image = (Image)resources.GetObject("pictureBox1.Image");
+        pictureBox1.Location = new Point(12, 12);
+        pictureBox1.Name = "pictureBox1";
+        pictureBox1.Size = new Size(64, 64);
+        pictureBox1.SizeMode = PictureBoxSizeMode.Zoom;
+        pictureBox1.TabIndex = 0;
+        pictureBox1.TabStop = false;
+        // 
+        // label2
+        // 
+        label2.AutoSize = true;
+        label2.Font = new Font("Segoe UI Semilight", 12F, FontStyle.Regular, GraphicsUnit.Point);
+        label2.Location = new Point(86, 49);
+        label2.Name = "label2";
+        label2.Size = new Size(181, 21);
+        label2.TabIndex = 2;
+        label2.Text = "ScottPlot.WinForms 5.0.0";
+        // 
+        // label1
+        // 
+        label1.AutoSize = true;
+        label1.Font = new Font("Segoe UI", 20.25F, FontStyle.Regular, GraphicsUnit.Point);
+        label1.Location = new Point(82, 12);
+        label1.Name = "label1";
+        label1.Size = new Size(203, 37);
+        label1.TabIndex = 1;
+        label1.Text = "ScottPlot Demo";
+        // 
+        // tbSearch
+        // 
+        tbSearch.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        tbSearch.BackColor = SystemColors.Control;
+        tbSearch.Location = new Point(391, 47);
+        tbSearch.Name = "tbSearch";
+        tbSearch.Size = new Size(167, 23);
+        tbSearch.TabIndex = 3;
+        // 
+        // label3
+        // 
+        label3.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+        label3.AutoSize = true;
+        label3.Location = new Point(340, 50);
+        label3.Name = "label3";
+        label3.Size = new Size(45, 15);
+        label3.TabIndex = 4;
+        label3.Text = "Search:";
+        // 
+        // demoWindowScrollList1
+        // 
+        demoWindowScrollList1.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+        demoWindowScrollList1.BackColor = SystemColors.Control;
+        demoWindowScrollList1.Location = new Point(0, 83);
+        demoWindowScrollList1.Name = "demoWindowScrollList1";
+        demoWindowScrollList1.Size = new Size(601, 560);
+        demoWindowScrollList1.TabIndex = 5;
+        // 
+        // MainMenuForm
+        // 
+        AutoScaleDimensions = new SizeF(7F, 15F);
+        AutoScaleMode = AutoScaleMode.Font;
+        AutoScroll = true;
+        ClientSize = new Size(603, 645);
+        Controls.Add(demoWindowScrollList1);
+        Controls.Add(label3);
+        Controls.Add(tbSearch);
+        Controls.Add(label2);
+        Controls.Add(pictureBox1);
+        Controls.Add(label1);
+        Icon = (Icon)resources.GetObject("$this.Icon");
+        Name = "MainMenuForm";
+        StartPosition = FormStartPosition.CenterScreen;
+        Text = "ScottPlot Demo";
+        ((System.ComponentModel.ISupportInitialize)pictureBox1).EndInit();
+        ResumeLayout(false);
+        PerformLayout();
     }
 
     #endregion
-
-    private TableLayoutPanel tableLayoutPanel1;
-    private Panel panel1;
     private PictureBox pictureBox1;
     private Label label2;
     private Label label1;
+    private TextBox tbSearch;
+    private Label label3;
+    private DemoWindowScrollList demoWindowScrollList1;
 }

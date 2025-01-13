@@ -1,68 +1,83 @@
-﻿using ScottPlot.Axis;
-using System.Data;
+﻿namespace ScottPlot.Grids;
 
-namespace ScottPlot.Grids;
-
-public class DefaultGrid : IGrid
+public class DefaultGrid(IXAxis xAxis, IYAxis yAxis) : IGrid
 {
-    public LineStyle MajorLineStyle = new() { Width = 1, Color = Colors.Black.WithOpacity(.1) };
-    public LineStyle MinorLineStyle = new() { Width = 0, Color = Colors.Black.WithOpacity(.05) };
-
-    public int MaximumNumberOfGridLines = 1000;
-
+    public bool IsVisible { get; set; } = true;
     public bool IsBeneathPlottables { get; set; } = true;
+    public IXAxis XAxis { get; set; } = xAxis;
+    public IYAxis YAxis { get; set; } = yAxis;
+    public GridStyle XAxisStyle { get; set; } = new();
+    public GridStyle YAxisStyle { get; set; } = new();
 
-    public IXAxis XAxis { get; private set; }
-    public IYAxis YAxis { get; private set; }
+    public Color LineColor { set { MajorLineColor = value; } }
+    public float LineWidth { set { MajorLineWidth = value; } }
+    public LinePattern LinePattern { set { MajorLinePattern = value; } }
 
-    public DefaultGrid(IXAxis xAxis, IYAxis yAxis)
+    public Color MajorLineColor
     {
-        XAxis = xAxis;
-        YAxis = yAxis;
-    }
-
-    public void Replace(IXAxis xAxis)
-    {
-        XAxis = xAxis;
-    }
-
-    public void Replace(IYAxis yAxis)
-    {
-        YAxis = yAxis;
-    }
-
-    public void Render(SKSurface surface, PixelRect dataRect)
-    {
-
-        if (MinorLineStyle.Width > 0)
+        get => XAxisStyle.MajorLineStyle.Color;
+        set
         {
-            float[] xTicksMinor = XAxis.TickGenerator.Ticks.Where(x => !x.IsMajor).Select(x => XAxis.GetPixel(x.Position, dataRect)).ToArray();
-            float[] yTicksMinor = YAxis.TickGenerator.Ticks.Where(x => !x.IsMajor).Select(x => YAxis.GetPixel(x.Position, dataRect)).ToArray();
-            RenderGridLines(surface, dataRect, xTicksMinor, XAxis.Edge, MinorLineStyle);
-            RenderGridLines(surface, dataRect, yTicksMinor, YAxis.Edge, MinorLineStyle);
-        }
-
-        if (MajorLineStyle.Width > 0)
-        {
-            float[] xTicksMajor = XAxis.TickGenerator.Ticks.Where(x => x.IsMajor).Select(x => XAxis.GetPixel(x.Position, dataRect)).ToArray();
-            float[] yTicksMajor = YAxis.TickGenerator.Ticks.Where(x => x.IsMajor).Select(x => YAxis.GetPixel(x.Position, dataRect)).ToArray();
-            RenderGridLines(surface, dataRect, xTicksMajor, XAxis.Edge, MajorLineStyle);
-            RenderGridLines(surface, dataRect, yTicksMajor, YAxis.Edge, MajorLineStyle);
+            XAxisStyle.MajorLineStyle.Color = value;
+            YAxisStyle.MajorLineStyle.Color = value;
         }
     }
 
-    private void RenderGridLines(SKSurface surface, PixelRect dataRect, float[] positions, Edge edge, LineStyle lineStyle)
+    public Color MinorLineColor
     {
-        Pixel[] starts = new Pixel[positions.Length];
-        Pixel[] ends = new Pixel[positions.Length];
-
-        for (int i = 0; i < positions.Length; i++)
+        set
         {
-            float px = positions[i];
-            starts[i] = edge.IsHorizontal() ? new Pixel(px, dataRect.Bottom) : new Pixel(dataRect.Left, px);
-            ends[i] = edge.IsHorizontal() ? new Pixel(px, dataRect.Top) : new Pixel(dataRect.Right, px);
+            XAxisStyle.MinorLineStyle.Color = value;
+            YAxisStyle.MinorLineStyle.Color = value;
+        }
+    }
+
+    public float MajorLineWidth
+    {
+        set
+        {
+            XAxisStyle.MajorLineStyle.Width = value;
+            YAxisStyle.MajorLineStyle.Width = value;
+        }
+    }
+
+    public float MinorLineWidth
+    {
+        set
+        {
+            XAxisStyle.MinorLineStyle.Width = value;
+            YAxisStyle.MinorLineStyle.Width = value;
+        }
+    }
+
+    public LinePattern MajorLinePattern
+    {
+        set
+        {
+            XAxisStyle.MajorLineStyle.Pattern = value;
+            YAxisStyle.MajorLineStyle.Pattern = value;
+        }
+    }
+
+    public void Render(RenderPack rp)
+    {
+        if (!IsVisible)
+            return;
+
+        if (XAxisStyle.IsVisible)
+        {
+            var minX = Math.Min(XAxis.Min, XAxis.Max);
+            var maxX = Math.Max(XAxis.Min, XAxis.Max);
+            var xTicks = XAxis.TickGenerator.Ticks.Where(x => x.Position >= minX && x.Position <= maxX);
+            XAxisStyle.Render(rp, XAxis, xTicks);
         }
 
-        Drawing.DrawLines(surface, starts, ends, lineStyle.Color, lineStyle.Width);
+        if (YAxisStyle.IsVisible)
+        {
+            var minY = Math.Min(YAxis.Min, YAxis.Max);
+            var maxY = Math.Max(YAxis.Min, YAxis.Max);
+            var yTicks = YAxis.TickGenerator.Ticks.Where(x => x.Position >= minY && x.Position <= maxY);
+            YAxisStyle.Render(rp, YAxis, yTicks);
+        }
     }
 }

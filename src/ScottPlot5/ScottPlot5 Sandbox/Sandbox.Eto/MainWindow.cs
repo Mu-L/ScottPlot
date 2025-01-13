@@ -8,8 +8,10 @@ partial class MainWindow : Form
     public MainWindow()
     {
         InitializeComponent();
-        etoPlot.Plot.Add.Signal(Generate.Sin(51));
-        etoPlot.Plot.Add.Signal(Generate.Cos(51));
-        etoPlot.Refresh();
+
+        EtoPlot1.UserInputProcessor.IsEnabled = true;
+
+        EtoPlot1.Plot.Add.Signal(Generate.Sin());
+        EtoPlot1.Plot.Add.Signal(Generate.Cos());
     }
 }

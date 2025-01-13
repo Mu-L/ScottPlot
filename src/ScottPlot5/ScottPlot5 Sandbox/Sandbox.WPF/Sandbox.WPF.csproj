@@ -2,13 +2,17 @@
 
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
-        <TargetFrameworks>net6.0-windows;net462</TargetFrameworks>
+        <TargetFramework>net8.0-windows</TargetFramework>
         <Nullable>enable</Nullable>
         <UseWPF>true</UseWPF>
-        <LangVersion>latest</LangVersion>
+        <LangVersion>11</LangVersion>
+        <IsPackable>false</IsPackable>
+        <SignAssembly>True</SignAssembly>
+        <AssemblyOriginatorKeyFile>../../Key.snk</AssemblyOriginatorKeyFile>
     </PropertyGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\..\ScottPlot5 Controls\ScottPlot.WPF\ScottPlot.WPF.csproj" />
+        <ProjectReference Include="..\..\ScottPlot5\ScottPlot.csproj" />
     </ItemGroup>
 </Project>

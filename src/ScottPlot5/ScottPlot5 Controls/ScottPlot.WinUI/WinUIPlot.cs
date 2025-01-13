@@ -1,36 +1,30 @@
-﻿using System;
-using System.IO;
-using System.Collections.Generic;
-using Windows.Storage.Pickers;
-using Windows.Storage.Streams;
-using Windows.ApplicationModel.DataTransfer;
-using Microsoft.UI.Xaml;
+﻿using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using SkiaSharp.Views.Windows;
-using ScottPlot.Control;
 
 namespace ScottPlot.WinUI;
 
 public partial class WinUIPlot : UserControl, IPlotControl
 {
-    private readonly SKXamlCanvas _canvas = CreateRenderTarget();
-
-    public Plot Plot { get; } = new();
-
+    public Plot Plot { get; internal set; }
+    public IMultiplot Multiplot { get; set; }
     public SkiaSharp.GRContext? GRContext => null;
 
-    public Interaction Interaction { get; private set; }
-
+    public IPlotMenu? Menu { get; set; }
+    public Interactivity.UserInputProcessor UserInputProcessor { get; }
     public Window? AppWindow { get; set; } // https://stackoverflow.com/a/74286947
+    public float DisplayScale { get; set; } = 1;
+
+    private readonly SKXamlCanvas _canvas = CreateRenderTarget();
 
     public WinUIPlot()
     {
-        Interaction = new(this)
-        {
-            ContextMenuItems = GetDefaultContextMenuItems()
-        };
+        Plot = new() { PlotControl = this };
+        Multiplot = new Multiplot(Plot);
+        UserInputProcessor = new(this);
+        Menu = new WinUIPlotMenu(this);
 
         Background = new SolidColorBrush(Microsoft.UI.Colors.White);
 
@@ -43,45 +37,41 @@ public partial class WinUIPlot : UserControl, IPlotControl
         _canvas.DoubleTapped += OnDoubleTapped;
         _canvas.KeyDown += OnKeyDown;
         _canvas.KeyUp += OnKeyUp;
+        Loaded += WinUIPlot_Loaded;
 
         this.Content = _canvas;
+    }
+
+    private void WinUIPlot_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (XamlRoot is null)
+            return;
+
+        XamlRoot.Changed += (s, e) => DetectDisplayScale();
+        Plot.ScaleFactor = XamlRoot.RasterizationScale;
+        DisplayScale = (float)XamlRoot.RasterizationScale;
     }
 
     private static SKXamlCanvas CreateRenderTarget()
     {
         return new SKXamlCanvas
         {
-            VerticalAlignment = VerticalAlignment.Stretch,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = Microsoft.UI.Xaml.VerticalAlignment.Stretch,
+            HorizontalAlignment = Microsoft.UI.Xaml.HorizontalAlignment.Stretch,
             Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent)
         };
     }
 
-    private ContextMenuItem[] GetDefaultContextMenuItems()
+    public void Reset()
     {
-        ContextMenuItem saveImage = new() { Label = "Save Image", OnInvoke = OpenSaveImageDialog };
-        ContextMenuItem copyImage = new() { Label = "Copy to Clipboard", OnInvoke = CopyImageToClipboard };
-
-        return new ContextMenuItem[] { saveImage, copyImage };
+        Reset(new Plot());
     }
 
-    private MenuFlyout GetContextMenu()
+    public void Reset(Plot plot)
     {
-        MenuFlyout menu = new();
-        foreach (var curr in Interaction.ContextMenuItems)
-        {
-            var menuItem = new MenuFlyoutItem { Text = curr.Label };
-            menuItem.Click += (s, e) => curr.OnInvoke();
-
-            menu.Items.Add(menuItem);
-        }
-
-        return menu;
-    }
-
-    public void Replace(Interaction interaction)
-    {
-        Interaction = interaction;
+        Plot = plot;
+        Plot.PlotControl = this;
+        Multiplot.Reset(plot);
     }
 
     public void Refresh()
@@ -91,103 +81,67 @@ public partial class WinUIPlot : UserControl, IPlotControl
 
     public void ShowContextMenu(Pixel position)
     {
-        var menu = GetContextMenu();
-
-        menu.ShowAt(this, position.ToPoint());
+        Menu?.ShowContextMenu(position);
     }
 
     private void OnPaintSurface(object? sender, SKPaintSurfaceEventArgs e)
     {
-        Plot.Render(e.Surface);
+        Multiplot.Render(e.Surface);
     }
 
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         Focus(FocusState.Pointer);
-
-        Interaction.MouseDown(e.Pixel(this), e.ToButton(this));
-
+        UserInputProcessor.ProcessMouseDown(this, e);
         (sender as UIElement)?.CapturePointer(e.Pointer);
-
         base.OnPointerPressed(e);
     }
 
     private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
     {
-        Interaction.MouseUp(e.Pixel(this), e.ToButton(this));
-
+        UserInputProcessor.ProcessMouseUp(this, e);
         (sender as UIElement)?.ReleasePointerCapture(e.Pointer);
-
         base.OnPointerReleased(e);
     }
 
     private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
     {
-        Interaction.OnMouseMove(e.Pixel(this));
+        UserInputProcessor.ProcessMouseMove(this, e);
         base.OnPointerMoved(e);
     }
 
     private void OnDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
     {
-        Interaction.DoubleClick();
         base.OnDoubleTapped(e);
     }
 
     private void OnPointerWheelChanged(object sender, PointerRoutedEventArgs e)
     {
-        Interaction.MouseWheelVertical(e.Pixel(this), e.GetCurrentPoint(this).Properties.MouseWheelDelta);
+        UserInputProcessor.ProcessMouseWheel(this, e);
         base.OnPointerWheelChanged(e);
     }
 
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        Interaction.KeyDown(e.Key());
+        UserInputProcessor.ProcessKeyDown(this, e);
         base.OnKeyDown(e);
     }
 
     private void OnKeyUp(object sender, KeyRoutedEventArgs e)
     {
-        Interaction.KeyUp(e.Key());
+        System.Diagnostics.Debug.WriteLine($"KEY UP {e.Key}");
+        UserInputProcessor.ProcessKeyUp(this, e);
         base.OnKeyUp(e);
     }
 
-    private async void OpenSaveImageDialog()
+    public float DetectDisplayScale()
     {
-        FileSavePicker dialog = new()
+        if (XamlRoot is not null)
         {
-            SuggestedFileName = Interaction.DefaultSaveImageFilename
-        };
-        dialog.FileTypeChoices.Add("PNG Files", new List<string>() { ".png" });
-        dialog.FileTypeChoices.Add("JPEG Files", new List<string>() { ".jpg", ".jpeg" });
-        dialog.FileTypeChoices.Add("BMP Files", new List<string>() { ".bmp" });
-        dialog.FileTypeChoices.Add("WebP Files", new List<string>() { ".webp" });
-
-#if NET6_0_WINDOWS10_0_18362 // https://github.com/microsoft/CsWinRT/blob/master/docs/interop.md#windows-sdk
-        // TODO: launch a pop-up window or otherwise inform if AppWindow is not set before using save-dialog
-        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(AppWindow);
-        WinRT.Interop.InitializeWithWindow.Initialize(dialog, hwnd);
-#endif
-
-        var file = await dialog.PickSaveFileAsync();
-
-        if (file != null)
-        {
-            // TODO: launch a pop-up window indicating if extension is invalid or save failed
-            ImageFormat format = ImageFormatLookup.FromFilePath(file.Name);
-            Plot.Save(file.Path, (int)ActualWidth, (int)ActualHeight, format);
+            Plot.ScaleFactor = XamlRoot.RasterizationScale;
+            DisplayScale = (float)XamlRoot.RasterizationScale;
         }
-    }
 
-    private void CopyImageToClipboard()
-    {
-        byte[] bytes = Plot.GetImage((int)ActualWidth, (int)ActualHeight).GetImageBytes();
-
-        var stream = new InMemoryRandomAccessStream();
-        stream.AsStreamForWrite().Write(bytes);
-
-        var content = new DataPackage();
-        content.SetBitmap(RandomAccessStreamReference.CreateFromStream(stream));
-
-        Clipboard.SetContent(content);
+        return DisplayScale;
     }
 }

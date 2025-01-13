@@ -1,0 +1,25 @@
+name: Autoformat Check
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+env:
+  DOTNET_VERSION: "9.0.x"
+
+jobs:
+  sp4-autoformat:
+    name: Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: 🛒 Checkout
+        uses: actions/checkout@v4
+      - name: ✨ Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+          dotnet-quality: "preview"
+      - name: ✒️ Code Format
+        run: |
+          bash  .github/workflows/scripts/autoformat.sh
+          echo "::warning::Run 'dotnet format' to fix code format errors"

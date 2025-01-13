@@ -1,17 +1,24 @@
 ﻿namespace ScottPlot.DataSources;
 
-public class CacheScatterLimitsDecorator : IScatterSource
+public class CacheScatterLimitsDecorator(IScatterSource source) : IScatterSource, IGetNearest
 {
-    private readonly IScatterSource _source;
+    private readonly IScatterSource _source = source;
+
+    public int MinRenderIndex
+    {
+        get => _source.MinRenderIndex;
+        set => _source.MinRenderIndex = value;
+    }
+
+    public int MaxRenderIndex
+    {
+        get => _source.MaxRenderIndex;
+        set => _source.MaxRenderIndex = value;
+    }
 
     private AxisLimits? _axisLimits = null;
-    private CoordinateRange? _limitsX = null;
-    private CoordinateRange? _limitsY = null;
-
-    public CacheScatterLimitsDecorator(IScatterSource source)
-    {
-        _source = source;
-    }
+    private CoordinateRange _limitsX = CoordinateRange.NotSet;
+    private CoordinateRange _limitsY = CoordinateRange.NotSet;
 
     public AxisLimits GetLimits()
     {
@@ -23,7 +30,7 @@ public class CacheScatterLimitsDecorator : IScatterSource
 
     public CoordinateRange GetLimitsX()
     {
-        if (_limitsX is null)
+        if (_limitsX == CoordinateRange.NotSet)
             _limitsX = _source.GetLimitsX();
 
         return _limitsX;
@@ -31,10 +38,20 @@ public class CacheScatterLimitsDecorator : IScatterSource
 
     public CoordinateRange GetLimitsY()
     {
-        if (_limitsY is null)
+        if (_limitsY == CoordinateRange.NotSet)
             _limitsY = _source.GetLimitsY();
 
         return _limitsY;
+    }
+
+    public DataPoint GetNearest(Coordinates mouseLocation, RenderDetails renderInfo, float maxDistance = 15)
+    {
+        return _source.GetNearest(mouseLocation, renderInfo, maxDistance);
+    }
+
+    public DataPoint GetNearestX(Coordinates mouseLocation, RenderDetails renderInfo, float maxDistance = 15)
+    {
+        return _source.GetNearestX(mouseLocation, renderInfo, maxDistance);
     }
 
     public IReadOnlyList<Coordinates> GetScatterPoints()

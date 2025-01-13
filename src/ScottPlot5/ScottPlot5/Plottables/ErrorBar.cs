@@ -1,62 +1,71 @@
-﻿using ScottPlot.Axis;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace ScottPlot.Plottables
+﻿namespace ScottPlot.Plottables
 {
-    public class ErrorBar : IPlottable
+    public class ErrorBar : IPlottable, IHasLine, IHasLegendText
     {
+        // TODO: use an errorbar source instead of so many lists
+
         public bool IsVisible { get; set; } = true;
-        public IAxes Axes { get; set; } = Axis.Axes.Default;
+        public IAxes Axes { get; set; } = new Axes();
 
         public IReadOnlyList<double> Xs { get; set; }
         public IReadOnlyList<double> Ys { get; set; }
-        public IReadOnlyList<double>? XErrorsPositive { get; set; }
-        public IReadOnlyList<double>? XErrorsNegative { get; set; }
-        public IReadOnlyList<double>? YErrorsPositive { get; set; }
-        public IReadOnlyList<double>? YErrorsNegative { get; set; }
+        public IReadOnlyList<double>? XErrorPositive { get; set; }
+        public IReadOnlyList<double>? XErrorNegative { get; set; }
+        public IReadOnlyList<double>? YErrorPositive { get; set; }
+        public IReadOnlyList<double>? YErrorNegative { get; set; }
 
-        public LineStyle LineStyle { get; set; } = new();
+        public LineStyle LineStyle { get; set; } = new() { Width = 1 };
+        public float LineWidth { get => LineStyle.Width; set => LineStyle.Width = value; }
+        public LinePattern LinePattern { get => LineStyle.Pattern; set => LineStyle.Pattern = value; }
+        public Color LineColor { get => LineStyle.Color; set => LineStyle.Color = value; }
+
         public float CapSize { get; set; } = 3;
+        public Color Color
+        {
+            get => LineStyle.Color;
+            set => LineStyle.Color = value;
+        }
 
-        public ErrorBar(IReadOnlyList<double> xs, IReadOnlyList<double> ys, IReadOnlyList<double>? xErrorsPositive, IReadOnlyList<double>? xErrorsNegative, IReadOnlyList<double>? yErrorsPositive, IReadOnlyList<double>? yErrorsNegative, Color color)
+        public ErrorBar(IReadOnlyList<double> xs, IReadOnlyList<double> ys, IReadOnlyList<double>? xErrorsPositive, IReadOnlyList<double>? xErrorsNegative, IReadOnlyList<double>? yErrorsPositive, IReadOnlyList<double>? yErrorsNegative)
         {
             Xs = xs;
             Ys = ys;
-            XErrorsPositive = xErrorsPositive;
-            XErrorsNegative = xErrorsNegative;
-            YErrorsPositive = yErrorsPositive;
-            YErrorsNegative = yErrorsNegative;
-            LineStyle.Color = color;
+            XErrorPositive = xErrorsPositive;
+            XErrorNegative = xErrorsNegative;
+            YErrorPositive = yErrorsPositive;
+            YErrorNegative = yErrorsNegative;
         }
 
-        public IEnumerable<LegendItem> LegendItems => Enumerable.Empty<LegendItem>();
+        public IEnumerable<LegendItem> LegendItems => LegendItem.Single(this, LegendText, LineStyle);
+
+        [Obsolete("use LegendText")]
+        public string Label { get => LegendText; set => LegendText = value; }
+        public string LegendText { get; set; } = string.Empty;
 
         public AxisLimits GetAxisLimits()
         {
-            AxisLimits limits = AxisLimits.NoLimits;
+            ExpandingAxisLimits limits = new();
 
             for (int i = 0; i < Xs.Count; i++)
             {
-                double x = Xs[i];
-                double y = Ys[i];
+                double xMin = XErrorNegative is null ? Xs[i] : Xs[i] - XErrorNegative[i];
+                double xMax = XErrorPositive is null ? Xs[i] : Xs[i] + XErrorPositive[i];
+                double yMin = YErrorNegative is null ? Ys[i] : Ys[i] - YErrorNegative[i];
+                double yMax = YErrorPositive is null ? Ys[i] : Ys[i] + YErrorPositive[i];
 
-                limits.ExpandX(x - XErrorsNegative?[i] ?? 0);
-                limits.ExpandX(x + XErrorsPositive?[i] ?? 0);
-                limits.ExpandY(y - YErrorsNegative?[i] ?? 0);
-                limits.ExpandY(y + YErrorsPositive?[i] ?? 0);
+                limits.ExpandX(xMin);
+                limits.ExpandX(xMax);
+                limits.ExpandY(yMin);
+                limits.ExpandY(yMax);
             }
 
-            return limits;
+            return limits.AxisLimits;
         }
 
-        public void Render(SKSurface surface)
+        public virtual void Render(RenderPack rp)
         {
-            RenderErrorBars(surface.Canvas, Xs, Ys, YErrorsPositive, YErrorsNegative);
-            RenderErrorBars(surface.Canvas, Ys, Xs, XErrorsPositive, XErrorsNegative, true);
+            RenderErrorBars(rp.Canvas, Xs, Ys, YErrorPositive, YErrorNegative);
+            RenderErrorBars(rp.Canvas, Ys, Xs, XErrorPositive, XErrorNegative, true);
         }
 
         private void RenderErrorBars(SKCanvas canvas, IReadOnlyList<double> positions, IReadOnlyList<double> vals, IReadOnlyList<double>? errorPositive, IReadOnlyList<double>? errorNegative, bool horizontal = false)

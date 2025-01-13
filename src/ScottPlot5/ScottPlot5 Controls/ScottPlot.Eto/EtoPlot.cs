@@ -1,73 +1,48 @@
 ﻿using Eto.Forms;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using ScottPlot.Control;
 using SkiaSharp;
 using Eto.Drawing;
 using System.Runtime.InteropServices;
-using System.IO;
 
 namespace ScottPlot.Eto;
 
 public class EtoPlot : Drawable, IPlotControl
 {
-    public Plot Plot { get; } = new();
-
+    public Plot Plot { get; internal set; }
+    public IMultiplot Multiplot { get; set; }
     public GRContext? GRContext => null;
-
-    public Interaction Interaction { get; private set; }
-
-    private readonly List<FileFilter> fileDialogFilters = new()
-    {
-        new() { Name = "PNG Files", Extensions = new string[] { "png" } },
-        new() { Name = "JPEG Files", Extensions = new string[] { "jpg", "jpeg" } },
-        new() { Name = "BMP Files", Extensions = new string[] { "bmp" } },
-        new() { Name = "WebP Files", Extensions = new string[] { "webp" } },
-        new() { Name = "All Files", Extensions = new string[] { "*" } },
-    };
+    public Interactivity.UserInputProcessor UserInputProcessor { get; }
+    public IPlotMenu? Menu { get; set; }
+    public float DisplayScale { get; set; }
 
     public EtoPlot()
     {
-        Interaction = new(this)
-        {
-            ContextMenuItems = GetDefaultContextMenuItems()
-        };
+        Plot = new() { PlotControl = this };
+        Multiplot = new Multiplot(Plot);
+        DisplayScale = DetectDisplayScale();
+        UserInputProcessor = new(this);
+        Menu = new EtoPlotMenu(this);
 
-        this.MouseDown += OnMouseDown;
-        this.MouseUp += OnMouseUp;
-        this.MouseMove += OnMouseMove;
-        this.MouseWheel += OnMouseWheel;
-        this.KeyDown += OnKeyDown;
-        this.KeyUp += OnKeyUp;
-        this.MouseDoubleClick += OnDoubleClick;
-        this.SizeChanged += OnSizeChanged;
-    }
-    private ContextMenuItem[] GetDefaultContextMenuItems()
-    {
-        ContextMenuItem saveImage = new() { Label = "Save Image", OnInvoke = OpenSaveImageDialog };
-        ContextMenuItem copyImage = new() { Label = "Copy to Clipboard", OnInvoke = CopyImageToClipboard };
-
-        return new ContextMenuItem[] { saveImage, copyImage };
+        MouseDown += OnMouseDown;
+        MouseUp += OnMouseUp;
+        MouseMove += OnMouseMove;
+        MouseWheel += OnMouseWheel;
+        KeyDown += OnKeyDown;
+        KeyUp += OnKeyUp;
+        SizeChanged += (s, e) => Refresh();
     }
 
-    private ContextMenu GetContextMenu()
+    public void Reset()
     {
-        ContextMenu menu = new();
-        foreach (var curr in Interaction.ContextMenuItems)
-        {
-            var menuItem = new ButtonMenuItem() { Text = curr.Label };
-            menuItem.Click += (s, e) => curr.OnInvoke();
-
-            menu.Items.Add(menuItem);
-        }
-
-        return menu;
+        Plot plot = new() { PlotControl = this };
+        Reset(plot);
     }
 
-    public void Replace(Interaction interaction)
+    public void Reset(Plot plot)
     {
-        Interaction = interaction;
+        Plot oldPlot = Plot;
+        Plot = plot;
+        oldPlot?.Dispose();
+        Multiplot.Reset(Plot);
     }
 
     public void Refresh()
@@ -77,8 +52,7 @@ public class EtoPlot : Drawable, IPlotControl
 
     public void ShowContextMenu(Pixel position)
     {
-        var menu = GetContextMenu();
-        menu.Show(this, new Point((int)position.X, (int)position.Y));
+        Menu?.ShowContextMenu(position);
     }
 
     protected override void OnPaint(PaintEventArgs args)
@@ -90,8 +64,8 @@ public class EtoPlot : Drawable, IPlotControl
         using var surface = SKSurface.Create(imageInfo);
         if (surface is null)
             return;
-
-        Plot.Render(surface);
+        PixelRect rect = new(0, (float)Bounds.Width, (float)Bounds.Height, 0);
+        Multiplot.Render(surface.Canvas, rect);
 
         SKImage img = surface.Snapshot();
         SKPixmap pixels = img.ToRasterImage().PeekPixels();
@@ -110,74 +84,38 @@ public class EtoPlot : Drawable, IPlotControl
     private void OnMouseDown(object? sender, MouseEventArgs e)
     {
         Focus();
-
-        Interaction.MouseDown(e.Pixel(), e.ToButton());
+        UserInputProcessor.ProcessMouseDown(e);
     }
 
     private void OnMouseUp(object? sender, MouseEventArgs e)
     {
-        Interaction.MouseUp(e.Pixel(), e.ToButton());
+        UserInputProcessor.ProcessMouseUp(e);
     }
 
     private void OnMouseMove(object? sender, MouseEventArgs e)
     {
-        Interaction.OnMouseMove(e.Pixel());
+        UserInputProcessor.ProcessMouseMove(e);
     }
 
     private void OnMouseWheel(object? sender, MouseEventArgs e)
     {
-        Interaction.MouseWheelVertical(e.Pixel(), e.Delta.Height);
+        UserInputProcessor.ProcessMouseWheel(e);
     }
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        Interaction.KeyDown(e.Key());
+        UserInputProcessor.ProcessKeyDown(e);
     }
 
     private void OnKeyUp(object? sender, KeyEventArgs e)
     {
-        Interaction.KeyUp(e.Key());
+        UserInputProcessor.ProcessKeyUp(e);
     }
 
-    private void OnDoubleClick(object? sender, MouseEventArgs e)
+    public float DetectDisplayScale()
     {
-        Interaction.DoubleClick();
-    }
-
-    private void OnSizeChanged(object? sender, EventArgs e)
-    {
-        Refresh();
-    }
-
-    private void OpenSaveImageDialog()
-    {
-        SaveFileDialog dialog = new() { FileName = Interaction.DefaultSaveImageFilename };
-
-        foreach (var curr in fileDialogFilters)
-            dialog.Filters.Add(curr);
-
-        if (dialog.ShowDialog(this) == DialogResult.Ok)
-        {
-            var filename = dialog.FileName;
-
-            if (string.IsNullOrEmpty(filename))
-                return;
-
-            // Eto doesn't add the extension for you when you select a filter :/
-            if (!Path.HasExtension(filename))
-                filename += $".{dialog.CurrentFilter.Extensions[0]}";
-
-            // TODO: launch a pop-up window indicating if extension is invalid or save failed
-            ImageFormat format = ImageFormatLookup.FromFilePath(filename);
-            Plot.Save(filename, Width, Height, format);
-        }
-    }
-
-    private void CopyImageToClipboard()
-    {
-        byte[] bytes = Plot.GetImage(Width, Height).GetImageBytes();
-        MemoryStream ms = new(bytes);
-        using Bitmap bmp = new(ms);
-        Clipboard.Instance.Image = bmp;
+        // TODO: improve support for DPI scale detection
+        // https://github.com/ScottPlot/ScottPlot/issues/2760
+        return 1.0f;
     }
 }

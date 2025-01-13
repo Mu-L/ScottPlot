@@ -1,14 +1,18 @@
-﻿using ScottPlot.Axis;
+﻿namespace ScottPlot.Plottables;
 
-namespace ScottPlot.Plottables;
-
-public class CandlestickPlot : IPlottable
+public class CandlestickPlot(IOHLCSource data) : IPlottable
 {
     public bool IsVisible { get; set; } = true;
 
-    public IAxes Axes { get; set; } = Axis.Axes.Default;
+    public IAxes Axes { get; set; } = new Axes();
 
-    private readonly DataSources.IOHLCSource Data;
+    public IOHLCSource Data { get; } = data;
+
+    /// <summary>
+    /// X position of candles is sourced from the OHLC's DateTime by default.
+    /// If this option is enabled, X position will be an ascending integers starting at 0 with no gaps.
+    /// </summary>
+    public bool Sequential { get; set; } = false;
 
     /// <summary>
     /// Fractional width of the candle symbol relative to its time span
@@ -37,50 +41,126 @@ public class CandlestickPlot : IPlottable
         Color = Color.FromHex("#f23645"),
     };
 
-    public CandlestickPlot(DataSources.IOHLCSource data)
+    public Color RisingColor
     {
-        Data = data;
+        set
+        {
+            RisingLineStyle.Color = value;
+            RisingFillStyle.Color = value;
+        }
+    }
+
+    public Color FallingColor
+    {
+        set
+        {
+            FallingLineStyle.Color = value;
+            FallingFillStyle.Color = value;
+        }
     }
 
     public IEnumerable<LegendItem> LegendItems => Enumerable.Empty<LegendItem>();
 
-    public AxisLimits GetAxisLimits() => Data.GetLimits();
+    public AxisLimits GetAxisLimits()
+    {
+        AxisLimits limits = Data.GetLimits(); // TODO: Data.GetSequentialLimits()
 
-    public void Render(SKSurface surface)
+        if (Sequential)
+        {
+            return new AxisLimits(
+                left: -0.5, // extra to account for body size
+                right: Data.GetOHLCs().Count - 1 + 0.5, // extra to account for body size
+                bottom: limits.Bottom,
+                top: limits.Top);
+        }
+
+        var ohlcs = Data.GetOHLCs();
+        if (ohlcs.Count == 0)
+            return limits;
+
+        double left = ohlcs.First().DateTime.ToOADate() - ohlcs.First().TimeSpan.TotalDays / 2;
+        double right = ohlcs.Last().DateTime.ToOADate() + ohlcs.Last().TimeSpan.TotalDays / 2;
+
+        return new(left, right, limits.Bottom, limits.Top);
+    }
+
+    public CoordinateRange GetPriceRangeInView()
+    {
+        var ohlcs = Data.GetOHLCs();
+        if (ohlcs.Count == 0)
+            return CoordinateRange.NoLimits;
+
+        int minIndexInView = (int)NumericConversion.Clamp(Axes.XAxis.Min, 0, ohlcs.Count - 1);
+        int maxIndexInView = (int)NumericConversion.Clamp(Axes.XAxis.Max, 0, ohlcs.Count - 1);
+        return Data.GetPriceRange(minIndexInView, maxIndexInView);
+    }
+
+    public (int index, OHLC ohlc)? GetOhlcNearX(double x)
+    {
+        int ohlcIndex = (int)Math.Round(x);
+        return (ohlcIndex >= 0 && ohlcIndex < Data.Count)
+            ? (ohlcIndex, Data.GetOHLCs()[ohlcIndex])
+            : null;
+    }
+
+    public virtual void Render(RenderPack rp)
     {
         using SKPaint paint = new();
 
-        foreach (IOHLC ohlc in Data.GetOHLCs())
+        var ohlcs = Data.GetOHLCs();
+        for (int i = 0; i < ohlcs.Count; i++)
         {
+            OHLC ohlc = ohlcs[i];
             bool isRising = ohlc.Close >= ohlc.Open;
             LineStyle lineStyle = isRising ? RisingLineStyle : FallingLineStyle;
-            FillStyle fillStlye = isRising ? RisingFillStyle : FallingFillStyle;
+            FillStyle fillStyle = isRising ? RisingFillStyle : FallingFillStyle;
 
-            float center = Axes.GetPixelX(ohlc.DateTime.ToNumber());
             float top = Axes.GetPixelY(ohlc.High);
             float bottom = Axes.GetPixelY(ohlc.Low);
 
-            TimeSpan halfWidth = new((long)(ohlc.TimeSpan.Ticks * SymbolWidth / 2));
-            DateTime leftTime = ohlc.DateTime - halfWidth;
-            DateTime rightTime = ohlc.DateTime + halfWidth;
-            float left = Axes.GetPixelX(leftTime.ToNumber());
-            float right = Axes.GetPixelX(rightTime.ToNumber());
+            float center, xPxLeft, xPxRight;
+            if (Sequential == false)
+            {
+                double centerNumber = NumericConversion.ToNumber(ohlc.DateTime);
+                center = Axes.GetPixelX(centerNumber);
+                double halfWidthNumber = ohlc.TimeSpan.TotalDays / 2 * SymbolWidth;
+                xPxLeft = Axes.GetPixelX(centerNumber - halfWidthNumber);
+                xPxRight = Axes.GetPixelX(centerNumber + halfWidthNumber);
+            }
+            else
+            {
+                center = Axes.GetPixelX(i);
+                xPxLeft = Axes.GetPixelX(i - (float)SymbolWidth / 2);
+                xPxRight = Axes.GetPixelX(i + (float)SymbolWidth / 2);
+            }
 
-            float open = Axes.GetPixelY(ohlc.Open);
-            float close = Axes.GetPixelY(ohlc.Close);
+            // do not render OHLCs off the screen
+            if (xPxRight < rp.DataRect.Left || xPxLeft > rp.DataRect.Right)
+                continue;
 
-            // center line
-            using SKPath path = new();
-            path.MoveTo(center, top);
-            path.LineTo(center, bottom);
+            float yPxOpen = Axes.GetPixelY(ohlc.Open);
+            float yPxClose = Axes.GetPixelY(ohlc.Close);
 
-            lineStyle.ApplyToPaint(paint);
-            surface.Canvas.DrawPath(path, paint);
+            // low/high line
+            PixelLine verticalLine = new(center, top, center, bottom);
+            Drawing.DrawLine(rp.Canvas, paint, verticalLine, lineStyle);
 
-            // rectangle
-            SKRect rect = new(left, Math.Max(open, close), right, Math.Min(open, close));
-            fillStlye.ApplyToPaint(paint);
-            surface.Canvas.DrawRect(rect, paint);
+            // open/close body
+            bool barIsAtLeastOnePixelWide = xPxRight - xPxLeft > 1;
+            if (barIsAtLeastOnePixelWide)
+            {
+                PixelRangeX xPxRange = new(xPxLeft, xPxRight);
+                PixelRangeY yPxRange = new(Math.Min(yPxOpen, yPxClose), Math.Max(yPxOpen, yPxClose));
+                PixelRect rect = new(xPxRange, yPxRange);
+                if (yPxOpen != yPxClose)
+                {
+                    fillStyle.Render(rp.Canvas, rect, paint);
+                }
+                else
+                {
+                    lineStyle.Render(rp.Canvas, rect.BottomLine, paint);
+                }
+            }
         }
     }
 }

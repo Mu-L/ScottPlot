@@ -1,34 +1,39 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFrameworks>net462;netstandard2.0;net6.0</TargetFrameworks>
+        <TargetFrameworks>net462;netstandard2.0;net6.0;net8.0</TargetFrameworks>
         <ImplicitUsings>disable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <LangVersion>latest</LangVersion>
+        <LangVersion>12</LangVersion>
+        <SignAssembly>True</SignAssembly>
+        <AssemblyOriginatorKeyFile>../Key.snk</AssemblyOriginatorKeyFile>
 
         <!-- NuGet info -->
         <PackageId>ScottPlot</PackageId>
-        <Version>5.0.6-beta</Version>
+        <Version>5.0.53</Version>
         <Authors>Scott Harden</Authors>
         <Company>Harden Technologies, LLC</Company>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <Copyright>Copyright (c) Scott Harden / Harden Technologies, LLC</Copyright>
         <PackageTags>plot graph data chart signal line bar heatmap scatter</PackageTags>
         <description>ScottPlot is a free and open-source plotting library for .NET. This package can be used to create static plots, and user controls for displaying plots interactively are available as separate NuGet packages.</description>
         <PackageIcon>icon.png</PackageIcon>
         <PackageReadmeFile>readme.md</PackageReadmeFile>
         <PackageProjectUrl>https://ScottPlot.NET</PackageProjectUrl>
         <RepositoryUrl>https://github.com/ScottPlot/ScottPlot.git</RepositoryUrl>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+        <DebugType>portable</DebugType>
         <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
         <IncludeSource>true</IncludeSource>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <NoWarn>NU1701, CS1591, CS1587, CS1573, CS1572, CS1570, CS1574, CS1584</NoWarn>
 
         <!--- SourceLink configuration -->
         <EmbedUntrackedSources>true</EmbedUntrackedSources>
         <Deterministic>true</Deterministic>
         <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
 
-        <!-- RS0016 and RS0017: public API change / ignore this warning while SP5 is in beta -->
-        <!-- RS0026 and RS0027: multiple overloads and optional parameters -->
-        <NoWarn>RS0016;RS0017;RS0026;RS0027</NoWarn>
     </PropertyGroup>
 
     <!-- Include additional files for the NuGet package -->
@@ -39,30 +44,19 @@
 
     <!-- NuGet package dependencies -->
     <ItemGroup>
-        <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.3">
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0">
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1">
-            <PrivateAssets>all</PrivateAssets>
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        </PackageReference>
-        <PackageReference Include="SkiaSharp" Version="2.*" />
-        <PackageReference Include="System.Drawing.Primitives" Version="4.3.0" />
+        <PackageReference Include="SkiaSharp" Version="2.88.9" />
+        <PackageReference Include="SkiaSharp.HarfBuzz" Version="2.88.9" />
+        <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" Version="7.3.0.3" />
+        <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.88.9" />
     </ItemGroup>
 
-    <ItemGroup Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform($([System.Runtime.InteropServices.OSPlatform]::Linux)))' == 'true'">
-        <PackageReference Include="SkiaSharp.NativeAssets.Linux" Version="2.*" />
-        <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="2.*" />
+    <!-- Packages allowing modern C# language features to be used in .NET Framework project -->
+    <ItemGroup Condition="'$(TargetFramework)' == 'net462'">
+        <PackageReference Include="System.ValueTuple" Version="4.5.0" />
     </ItemGroup>
-
-    <!-- API Tracking -->
-    <ItemGroup>
-        <AdditionalFiles Remove="PublicAPI.Shipped.txt" />
-        <AdditionalFiles Remove="PublicAPI.Unshipped.txt" />
-    </ItemGroup>
-
-    <!-- Include shared source files -->
-    <Import Project="..\..\Shared\ScottPlot\ScottPlotShared.projitems" Label="ScottPlotShared" />
 
 </Project>

@@ -1,12 +1,15 @@
 ﻿using OpenTK.Graphics;
 using OpenTK.Graphics.OpenGL;
+#if NETCOREAPP || NET
+using OpenTK.Mathematics;
+#endif
 
 namespace ScottPlot.OpenGL.GLPrograms;
 
 public class MarkerOpenSquareProgram : MarkerFillSquareProgram
 {
     protected override string GeometryShaderSource =>
-    @"# version 430 core
+    @"#version 430 core
         layout(points) in;
         layout(triangle_strip, max_vertices=4) out;
 

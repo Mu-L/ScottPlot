@@ -7,11 +7,25 @@ public class TitlePanel : IPanel
     public Edge Edge => Edge.Top;
 
     public bool ShowDebugInformation { get; set; } = false;
+    public float MinimumSize { get; set; } = 0;
+    public float MaximumSize { get; set; } = float.MaxValue;
 
-    public Label Label { get; } = new()
+    /// <summary>
+    /// Enable this to center the panel using the full width of the figure rather than
+    /// centering it over the width of the data area.
+    /// </summary>
+    public bool FullFigureCenter { get; set; } = false;
+
+    public TitlePanel()
+    {
+        Label.Rotation = 0;
+    }
+
+    public LabelStyle Label { get; } = new()
     {
         Text = string.Empty,
-        Font = new() { Size = 16, Bold = true },
+        FontSize = 16,
+        Bold = true,
         Alignment = Alignment.LowerCenter,
     };
 
@@ -37,23 +51,32 @@ public class TitlePanel : IPanel
         if (string.IsNullOrWhiteSpace(Label.Text))
             return 0;
 
-        return Label.Measure().Height + VerticalPadding;
+        using SKPaint paint = new();
+
+        return Label.Measure(Label.Text, paint).Height + VerticalPadding;
     }
 
-    public void Render(SKSurface surface, PixelRect dataRect, float size, float offset)
+    public void Render(RenderPack rp, float size, float offset)
     {
         if (!IsVisible)
             return;
 
-        PixelRect panelRect = GetPanelRect(dataRect, size, offset);
+        using SKPaint paint = new();
+
+        PixelRect panelRect = GetPanelRect(rp.DataRect, size, offset);
+
+        if (FullFigureCenter)
+        {
+            panelRect = new(rp.FigureRect.Left, rp.DataRect.Right, panelRect.Bottom, panelRect.Top);
+        }
 
         Pixel labelPoint = new(panelRect.HorizontalCenter, panelRect.Bottom);
 
         if (ShowDebugInformation)
         {
-            Drawing.DrawDebugRectangle(surface.Canvas, panelRect, labelPoint, Label.Font.Color);
+            Drawing.DrawDebugRectangle(rp.Canvas, panelRect, labelPoint, Label.ForeColor);
         }
 
-        Label.Draw(surface.Canvas, labelPoint);
+        Label.Render(rp.Canvas, labelPoint, paint);
     }
 }
